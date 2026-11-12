@@ -1,0 +1,56 @@
+name: Publish Zeus source
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Branch in Zeus-Client to update
+        required: true
+        default: main
+      include_jar:
+        description: Also copy the built jar into the target repository
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out this repository
+        uses: actions/checkout@v4
+
+      - name: Unpack the source
+        run: |
+          rm -rf source
+          mkdir source
+          unzip -q zeus-client-source.zip -d source
+
+      - name: Copy into Zeus-Client and push
+        env:
+          TOKEN: ${{ secrets.ZEUS_TOKEN }}
+          BRANCH: ${{ inputs.branch }}
+          WITH_JAR: ${{ inputs.include_jar }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TOKEN}" ]; then
+            echo "Missing ZEUS_TOKEN secret"
+            exit 1
+          fi
+          git clone --depth 1 --branch "${BRANCH}" "https://x-access-token:${TOKEN}@github.com/Zlorbie7881/Zeus-Client.git" target
+          cp -a source/. target/
+          if [ "${WITH_JAR}" = "true" ]; then
+            cp zeus-0.9.9.0.jar target/
+          fi
+          cd target
+          git config user.name "Zeus Builder"
+          git config user.email "builder@users.noreply.github.com"
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "Nothing to publish"
+            exit 0
+          fi
+          git add -A
+          git commit -m "Zeus improvements from Freebuff"
+          git push origin "HEAD:${BRANCH}"
